@@ -253,44 +253,37 @@ const StarRating = ({ value, onChange, readonly=false }) => (
   </div>
 );
 
-// ── localStorage 헬퍼 ─────────────────────────────────────────────
-const load = (key, fallback) => {
-  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
-};
-const save = (key, value) => {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
-};
+// ── Supabase 클라이언트 ───────────────────────────────────────────
+import { createClient } from "@supabase/supabase-js";
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_KEY
+);
 
 // ── 메인 ─────────────────────────────────────────────────────────
 export default function RunTracker() {
   const [tab, setTab] = useState("dashboard");
-  const [students, setStudents] = useState(() => load("rt_students", INIT_STUDENTS));
-  const [selectedStudentId, setSelectedStudentId] = useState(() => load("rt_selectedId", null));
+  const [students, setStudents] = useState([]);
+  const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [activeMetric, setActiveMetric] = useState("avgSpeed");
   const [rankMetric, setRankMetric] = useState("avgSpeed");
   const [rankScope, setRankScope] = useState("latest");
   const [compareStudentIds, setCompareStudentIds] = useState([]);
   const [compareMetric, setCompareMetric] = useState("avgSpeed");
-  const [records, setRecords] = useState(() => load("rt_records", INIT_RUNS));
+  const [records, setRecords] = useState({});
   const [saved, setSaved] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
   const [isTeacher, setIsTeacher] = useState(false);
   const [showStudentManager, setShowStudentManager] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const [goals, setGoals] = useState(() => load("rt_goals", { distance:4.0, avgPace:6.0, avgSpeed:10.0, cadence:175, heartRate:160, calories:300, stride:1.2 }));
+  const [goals, setGoals] = useState({ distance:4.0, avgPace:6.0, avgSpeed:10.0, cadence:175, heartRate:160, calories:300, stride:1.2 });
   const [goalEditing, setGoalEditing] = useState(false);
   const [goalDraft, setGoalDraft] = useState({ ...goals });
 
-  const [reflections, setReflections] = useState(() => load("rt_reflections", {}));
-  const [feedbacks, setFeedbacks] = useState(() => load("rt_feedbacks", {}));
+  const [reflections, setReflections] = useState({});
+  const [feedbacks, setFeedbacks] = useState({});
 
-  // ── 데이터 변경 시 자동 저장 ──────────────────────────────────
-  useEffect(() => { save("rt_students", students); }, [students]);
-  useEffect(() => { save("rt_records", records); }, [records]);
-  useEffect(() => { save("rt_goals", goals); }, [goals]);
-  useEffect(() => { save("rt_reflections", reflections); }, [reflections]);
-  useEffect(() => { save("rt_feedbacks", feedbacks); }, [feedbacks]);
-  useEffect(() => { save("rt_selectedId", selectedStudentId); }, [selectedStudentId]);
   const [reflForm, setReflForm] = useState({ text:"", mood:"😊", effort:3 });
   const [reflTarget, setReflTarget] = useState(null);
   const [reflSaved, setReflSaved] = useState(false);
@@ -300,25 +293,90 @@ export default function RunTracker() {
 
   const [form, setForm] = useState({ date:new Date().toISOString().slice(0,10), distance:"", avgPace:"", avgSpeed:"", cadence:"", heartRate:"", calories:"", duration:"", stride:"" });
 
+  // ── 초기 데이터 로드 ──────────────────────────────────────────
+  useEffect(() => { loadAll(); }, []);
+
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      // 학생
+      const { data: studs } = await supabase.from("students").select("*").order("id");
+      const studentList = (studs||[]).map(s => ({ id:s.id, name:s.name, grade:s.grade, avatar:s.avatar }));
+      setStudents(studentList);
+      if (studentList.length > 0) setSelectedStudentId(studentList[0].id);
+
+      // 러닝 기록
+      const { data: runs } = await supabase.from("runs").select("*").order("date");
+      const rec = {};
+      (runs||[]).forEach(r => {
+        if (!rec[r.student_id]) rec[r.student_id] = [];
+        rec[r.student_id].push({ id:r.id, date:r.date, label:r.label||"기록", distance:r.distance, avgPace:r.avg_pace, avgSpeed:r.avg_speed, cadence:r.cadence, heartRate:r.heart_rate, calories:r.calories, duration:r.duration, stride:r.stride });
+      });
+      setRecords(rec);
+
+      // 소감
+      const { data: refls } = await supabase.from("reflections").select("*");
+      const reflMap = {};
+      (refls||[]).forEach(r => { reflMap[`${r.student_id}-${r.run_date}`] = { text:r.text, mood:r.mood, effort:r.effort }; });
+      setReflections(reflMap);
+
+      // 피드백
+      const { data: fbs } = await supabase.from("feedbacks").select("*");
+      const fbMap = {};
+      (fbs||[]).forEach(f => { fbMap[`${f.student_id}-${f.run_date}`] = { text:f.text, stars:f.stars, tag:f.tag }; });
+      setFeedbacks(fbMap);
+
+      // 목표
+      const { data: g } = await supabase.from("goals").select("*").eq("id",1).single();
+      if (g) setGoals({ distance:g.distance, avgPace:g.avg_pace, avgSpeed:g.avg_speed, cadence:g.cadence, heartRate:g.heart_rate, calories:g.calories, stride:g.stride });
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
   // 현재 선택된 학생 객체 (null 안전)
   const selectedStudent = students.find(s => s.id === selectedStudentId) || students[0] || null;
   const studentRuns = selectedStudent ? (records[selectedStudent.id] || []) : [];
   const latestRun = studentRuns[studentRuns.length - 1] || null;
   const prevRun = studentRuns[studentRuns.length - 2] || null;
 
-  // 학생 저장
-  const handleSaveStudents = (newList) => {
-    setStudents(newList);
-    if (newList.length > 0) {
-      const stillExists = newList.find(s => s.id === selectedStudentId);
-      setSelectedStudentId(stillExists ? stillExists.id : newList[0].id);
-    } else {
-      setSelectedStudentId(null);
+  // 학생 저장 (Supabase)
+  const handleSaveStudents = async (newList) => {
+    // 삭제된 학생 처리
+    const deletedIds = students.filter(s => !newList.find(n => n.id===s.id)).map(s => s.id);
+    for (const id of deletedIds) {
+      await supabase.from("students").delete().eq("id", id);
     }
+    // 추가/수정
+    for (const s of newList) {
+      const existing = students.find(e => e.id===s.id);
+      if (!existing) {
+        await supabase.from("students").insert({ name:s.name, grade:s.grade, avatar:s.avatar });
+      } else if (existing.name!==s.name || existing.grade!==s.grade || existing.avatar!==s.avatar) {
+        await supabase.from("students").update({ name:s.name, grade:s.grade, avatar:s.avatar }).eq("id", s.id);
+      }
+    }
+    await loadAll();
+    if (newList.length > 0) {
+      const stillExists = newList.find(s => s.id===selectedStudentId);
+      setSelectedStudentId(stillExists ? stillExists.id : newList[0].id);
+    } else setSelectedStudentId(null);
     setShowStudentManager(false);
   };
 
-  const classStats = () => {
+  const handleSaveGoals = async () => {
+    await supabase.from("goals").update({ distance:goalDraft.distance, avg_pace:goalDraft.avgPace, avg_speed:goalDraft.avgSpeed, cadence:goalDraft.cadence, heart_rate:goalDraft.heartRate, calories:goalDraft.calories, stride:goalDraft.stride }).eq("id",1);
+    setGoals({ ...goalDraft });
+    setGoalEditing(false);
+  };
+
+  // 로딩 화면
+  if (loading) return (
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
+      <div style={{ fontSize:48 }}>🏃</div>
+      <div style={{ fontSize:16, fontWeight:700, color:C.neon }}>데이터 불러오는 중...</div>
+      <div style={{ fontSize:12, color:C.muted }}>약산 달리기 클럽</div>
+    </div>
+  );
     const byGrade = {};
     students.forEach(s => {
       const runs = records[s.id] || [];
@@ -345,14 +403,29 @@ export default function RunTracker() {
     }).sort((a,b) => cfg.goodUp ? b.val-a.val : a.val-b.val);
   };
 
-  const saveReflection = () => {
+  const saveReflection = async () => {
     if (!reflTarget || !reflForm.text.trim()) return;
-    setReflections(prev => ({ ...prev, [`${reflTarget.sid}-${reflTarget.date}`]: { ...reflForm } }));
+    const key = `${reflTarget.sid}-${reflTarget.date}`;
+    const existing = reflections[key];
+    if (existing) {
+      await supabase.from("reflections").update({ text:reflForm.text, mood:reflForm.mood, effort:reflForm.effort }).eq("student_id", reflTarget.sid).eq("run_date", reflTarget.date);
+    } else {
+      await supabase.from("reflections").insert({ student_id:reflTarget.sid, run_date:reflTarget.date, text:reflForm.text, mood:reflForm.mood, effort:reflForm.effort });
+    }
+    setReflections(prev => ({ ...prev, [key]: { ...reflForm } }));
     setReflSaved(true); setTimeout(() => { setReflSaved(false); setReflTarget(null); }, 1800);
   };
-  const saveFeedback = () => {
+
+  const saveFeedback = async () => {
     if (!fbTarget || !fbForm.text.trim()) return;
-    setFeedbacks(prev => ({ ...prev, [`${fbTarget.sid}-${fbTarget.date}`]: { ...fbForm } }));
+    const key = `${fbTarget.sid}-${fbTarget.date}`;
+    const existing = feedbacks[key];
+    if (existing) {
+      await supabase.from("feedbacks").update({ text:fbForm.text, stars:fbForm.stars, tag:fbForm.tag }).eq("student_id", fbTarget.sid).eq("run_date", fbTarget.date);
+    } else {
+      await supabase.from("feedbacks").insert({ student_id:fbTarget.sid, run_date:fbTarget.date, text:fbForm.text, stars:fbForm.stars, tag:fbForm.tag });
+    }
+    setFeedbacks(prev => ({ ...prev, [key]: { ...fbForm } }));
     setFbSaved(true); setTimeout(() => { setFbSaved(false); setFbTarget(null); }, 1800);
   };
 
@@ -372,10 +445,14 @@ export default function RunTracker() {
     setExportNotice(`📥 "${fname}" 다운로드 완료!`); setTimeout(()=>setExportNotice(""),3000);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedStudent) return;
-    const newRun = { date:form.date, label:"기록", distance:parseFloat(form.distance)||0, avgPace:parseFloat(form.avgPace)||0, avgSpeed:parseFloat(form.avgSpeed)||0, cadence:parseInt(form.cadence)||0, heartRate:parseInt(form.heartRate)||0, calories:parseInt(form.calories)||0, duration:parseInt(form.duration)||0, stride:parseFloat(form.stride)||0 };
-    setRecords(prev => ({ ...prev, [selectedStudent.id]: [...(prev[selectedStudent.id]||[]), newRun] }));
+    const newRun = { student_id:selectedStudent.id, date:form.date, label:"기록", distance:parseFloat(form.distance)||0, avg_pace:parseFloat(form.avgPace)||0, avg_speed:parseFloat(form.avgSpeed)||0, cadence:parseInt(form.cadence)||0, heart_rate:parseInt(form.heartRate)||0, calories:parseInt(form.calories)||0, duration:parseInt(form.duration)||0, stride:parseFloat(form.stride)||0 };
+    const { data } = await supabase.from("runs").insert(newRun).select().single();
+    if (data) {
+      const mapped = { id:data.id, date:data.date, label:"기록", distance:data.distance, avgPace:data.avg_pace, avgSpeed:data.avg_speed, cadence:data.cadence, heartRate:data.heart_rate, calories:data.calories, duration:data.duration, stride:data.stride };
+      setRecords(prev => ({ ...prev, [selectedStudent.id]: [...(prev[selectedStudent.id]||[]), mapped] }));
+    }
     setSaved(true); setTimeout(()=>setSaved(false),2500);
     setForm(f => ({ ...f, distance:"", avgPace:"", avgSpeed:"", cadence:"", heartRate:"", calories:"", duration:"", stride:"" }));
   };
@@ -423,8 +500,8 @@ export default function RunTracker() {
       <div style={{ background:"linear-gradient(135deg,#0A1A12,#0F2018)", borderBottom:`1px solid ${C.cardBorder}`, padding:"18px 20px 14px", position:"sticky", top:0, zIndex:100 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:10 }}>
           <div>
-            <div style={{ fontSize:10, color:C.neon, letterSpacing:2, textTransform:"uppercase", marginBottom:2 }}>⬡ RUNNING TRACKER</div>
-            <h1 style={{ margin:0, fontSize:19, fontWeight:900, letterSpacing:-0.5 }}>학생 러닝 데이터</h1>
+            <div style={{ fontSize:10, color:C.neon, letterSpacing:2, textTransform:"uppercase", marginBottom:2 }}>⬡ RUNNING CLUB</div>
+            <h1 style={{ margin:0, fontSize:19, fontWeight:900, letterSpacing:-0.5 }}>약산 달리기 클럽</h1>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6, alignItems:"flex-end" }}>
             {!noStudents && (
@@ -696,7 +773,7 @@ export default function RunTracker() {
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                 <div><div style={{ fontWeight:800, fontSize:15 }}>🎯 목표 설정</div><div style={{ fontSize:11, color:C.muted, marginTop:2 }}>각 지표의 목표값을 설정합니다</div></div>
                 {!goalEditing ? <button onClick={()=>{setGoalEditing(true);setGoalDraft({...goals});}} style={{ padding:"8px 16px", background:C.neon, border:"none", borderRadius:10, color:"#0A0F0D", fontWeight:700, fontSize:12, cursor:"pointer" }}>편집</button>
-                  : <div style={{ display:"flex", gap:6 }}><button onClick={()=>{setGoals({...goalDraft});setGoalEditing(false);}} style={{ padding:"8px 14px", background:C.neon, border:"none", borderRadius:10, color:"#0A0F0D", fontWeight:700, fontSize:12, cursor:"pointer" }}>저장</button><button onClick={()=>setGoalEditing(false)} style={{ padding:"8px 14px", background:"transparent", border:`1px solid ${C.cardBorder}`, borderRadius:10, color:C.muted, fontSize:12, cursor:"pointer" }}>취소</button></div>}
+                  : <div style={{ display:"flex", gap:6 }}><button onClick={handleSaveGoals} style={{ padding:"8px 14px", background:C.neon, border:"none", borderRadius:10, color:"#0A0F0D", fontWeight:700, fontSize:12, cursor:"pointer" }}>저장</button><button onClick={()=>setGoalEditing(false)} style={{ padding:"8px 14px", background:"transparent", border:`1px solid ${C.cardBorder}`, borderRadius:10, color:C.muted, fontSize:12, cursor:"pointer" }}>취소</button></div>}
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                 {Object.entries(METRIC_CONFIG).map(([k,cfg]) => (
