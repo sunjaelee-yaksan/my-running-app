@@ -7,50 +7,9 @@ import {
 } from "recharts";
 import * as XLSX from "xlsx";
 
-// ── 초기 샘플 학생 데이터 ─────────────────────────────────────────
-const INIT_STUDENTS = [
-  { id: 1, name: "김민준", grade: "2-1", avatar: "🏃" },
-  { id: 2, name: "이서연", grade: "2-1", avatar: "🏃‍♀️" },
-  { id: 3, name: "박지훈", grade: "2-2", avatar: "🏃" },
-  { id: 4, name: "최수아", grade: "2-2", avatar: "🏃‍♀️" },
-  { id: 5, name: "정도윤", grade: "2-3", avatar: "🏃" },
-];
-
-const generateRuns = (seed = 1) => {
-  const sessions = [];
-  const baseDate = new Date("2025-03-01");
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(baseDate);
-    d.setDate(baseDate.getDate() + i * 7);
-    const noise = () => (Math.random() - 0.5) * 0.4;
-    sessions.push({
-      date: d.toISOString().slice(0, 10),
-      label: `${i + 1}주차`,
-      distance: parseFloat((2.5 + seed * 0.3 + i * 0.15 + noise()).toFixed(2)),
-      avgPace: parseFloat((7.5 - seed * 0.2 - i * 0.1 + noise()).toFixed(2)),
-      avgSpeed: parseFloat((8.0 + seed * 0.3 + i * 0.12 + noise()).toFixed(2)),
-      cadence: Math.round(155 + seed * 2 + i * 0.8 + noise() * 4),
-      heartRate: Math.round(168 - seed * 1.5 + noise() * 5),
-      calories: Math.round(180 + seed * 10 + i * 8 + noise() * 20),
-      duration: Math.round(18 + i * 0.5 + noise() * 2),
-      stride: parseFloat((1.05 + seed * 0.02 + i * 0.005 + noise() * 0.03).toFixed(2)),
-    });
-  }
-  return sessions;
-};
-
+// ── 초기 데이터 (빈 상태) ─────────────────────────────────────────
+const INIT_STUDENTS = [];
 const INIT_RUNS = {};
-INIT_STUDENTS.forEach((s) => { INIT_RUNS[s.id] = generateRuns(s.id); });
-
-const SAMPLE_REFLECTIONS = {
-  "1-2025-03-01": { text: "오늘은 날씨가 좋아서 기분 좋게 달렸어요!", mood: "😊", effort: 4 },
-  "2-2025-03-01": { text: "무릎이 조금 아팠지만 완주했어요.", mood: "😤", effort: 3 },
-  "3-2025-03-01": { text: "케이던스를 의식하며 달렸더니 달라진 느낌이에요!", mood: "🔥", effort: 5 },
-};
-const SAMPLE_FEEDBACKS = {
-  "1-2025-03-01": { text: "꾸준한 향상이 보입니다. 페이스 조절 연습을 계속해 보세요.", stars: 4, tag: "잘함" },
-  "3-2025-03-01": { text: "케이던스 의식이 정말 좋아요! 이 자세를 유지해 보세요.", stars: 5, tag: "우수" },
-};
 
 // ── 색상 ──────────────────────────────────────────────────────────
 const C = {
@@ -369,8 +328,8 @@ export default function RunTracker() {
   const [goalEditing, setGoalEditing] = useState(false);
   const [goalDraft, setGoalDraft] = useState({ ...goals });
 
-  const [reflections, setReflections] = useState({ ...SAMPLE_REFLECTIONS });
-  const [feedbacks, setFeedbacks] = useState({ ...SAMPLE_FEEDBACKS });
+  const [reflections, setReflections] = useState({});
+  const [feedbacks, setFeedbacks] = useState({});
   const [reflForm, setReflForm] = useState({ text: "", mood: "😊", effort: 3 });
   const [reflTarget, setReflTarget] = useState(null);
   const [reflSaved, setReflSaved] = useState(false);
@@ -383,9 +342,9 @@ export default function RunTracker() {
     distance:"", avgPace:"", avgSpeed:"", cadence:"", heartRate:"", calories:"", duration:"", stride:"",
   });
 
-  const studentRuns = records[selectedStudent.id] || [];
-  const latestRun = studentRuns[studentRuns.length - 1];
-  const prevRun = studentRuns[studentRuns.length - 2];
+  const studentRuns = selectedStudent ? (records[selectedStudent.id] || []) : [];
+  const latestRun = studentRuns[studentRuns.length - 1] || null;
+  const prevRun = studentRuns[studentRuns.length - 2] || null;
 
   // 학생 관리 저장
   const handleSaveStudents = (newList) => {
@@ -546,6 +505,21 @@ export default function RunTracker() {
 
       <div style={{padding:"16px 20px"}}>
 
+        {/* ══ 학생 없을 때 안내 ══ */}
+        {students.length === 0 && (
+          <div style={{textAlign:"center",padding:"60px 20px"}}>
+            <div style={{fontSize:64,marginBottom:16}}>👥</div>
+            <div style={{fontSize:18,fontWeight:800,marginBottom:8}}>등록된 학생이 없습니다</div>
+            <div style={{fontSize:13,color:C.muted,marginBottom:24}}>교사 모드로 전환 후 학생을 추가해 주세요</div>
+            <button onClick={()=>{setIsTeacher(true);setShowStudentManager(true);}} style={{padding:"14px 28px",background:C.neon,border:"none",borderRadius:14,color:"#0A0F0D",fontWeight:800,fontSize:15,cursor:"pointer"}}>
+              👩‍🏫 교사 모드로 학생 추가하기
+            </button>
+          </div>
+        )}
+
+        {/* ══ 탭 콘텐츠 (학생 있을 때만) ══ */}
+        {students.length > 0 && <>
+
         {/* ══ 대시보드 ══ */}
         {tab==="dashboard"&&(
           <div>
@@ -679,6 +653,8 @@ export default function RunTracker() {
             {S(<>{T("📊 최신 기록 비교")}<ResponsiveContainer width="100%" height={170}><BarChart data={compareStudents.map(sid=>{const s=students.find(x=>x.id===sid);const last=(records[sid]||[]).slice(-1)[0];return{name:s?.name,value:last?.[compareMetric]||0};})}><CartesianGrid stroke={C.cardBorder} strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tick={{fill:C.muted,fontSize:11}}/><YAxis tick={{fill:C.muted,fontSize:10}}/><Tooltip contentStyle={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:10,fontSize:12}}/>{goals[compareMetric]&&<ReferenceLine y={goals[compareMetric]} stroke={C.gold} strokeDasharray="4 3"/>}<Bar dataKey="value" name={METRIC_CONFIG[compareMetric].label} fill={METRIC_CONFIG[compareMetric].color} radius={[8,8,0,0]}/></BarChart></ResponsiveContainer></>)}
           </div>
         )}
+
+        </>}
       </div>
     </div>
   );
