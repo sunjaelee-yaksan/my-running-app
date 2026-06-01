@@ -10,7 +10,9 @@ import * as XLSX from "xlsx";
 
 
 
-// ── 색상 ─────────────────────────────────────────────────────────
+// ── Supabase 설정 ─────────────────────────────────────────────────
+const SUPABASE_URL = "https://djmovquuidezfievtgbf.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqbW92cXV1aWRlemZpZXZ0Z2JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNDg2MjEsImV4cCI6MjA5NTgyNDYyMX0._8UmlWwO2diFhAHdr_Dbw3mayXGTWgaopSyRBI5AoIQ";
 const C = {
   neon: "#00FF87", neonDim: "#00CC6A", accent: "#FF6B35",
   blue: "#00B4D8", purple: "#9B59FF", red: "#FF4D6D", gold: "#FFB703", teal: "#4CC9F0",
@@ -253,10 +255,7 @@ const StarRating = ({ value, onChange, readonly=false }) => (
 );
 
 // ── 메인 ─────────────────────────────────────────────────────────
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_KEY
-);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 export default function RunTracker() {
   const [tab, setTab] = useState("dashboard");
