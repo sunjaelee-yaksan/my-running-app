@@ -8,9 +8,7 @@ import {
 } from "recharts";
 import * as XLSX from "xlsx";
 
-// ── 초기 데이터 (완전히 빈 상태) ─────────────────────────────────
-const INIT_STUDENTS = [];
-const INIT_RUNS = {};
+
 
 // ── 색상 ─────────────────────────────────────────────────────────
 const C = {
