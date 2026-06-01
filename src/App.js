@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -253,28 +253,44 @@ const StarRating = ({ value, onChange, readonly=false }) => (
   </div>
 );
 
+// ── localStorage 헬퍼 ─────────────────────────────────────────────
+const load = (key, fallback) => {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+};
+const save = (key, value) => {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+};
+
 // ── 메인 ─────────────────────────────────────────────────────────
 export default function RunTracker() {
   const [tab, setTab] = useState("dashboard");
-  const [students, setStudents] = useState(INIT_STUDENTS);
-  const [selectedStudentId, setSelectedStudentId] = useState(null);
+  const [students, setStudents] = useState(() => load("rt_students", INIT_STUDENTS));
+  const [selectedStudentId, setSelectedStudentId] = useState(() => load("rt_selectedId", null));
   const [activeMetric, setActiveMetric] = useState("avgSpeed");
   const [rankMetric, setRankMetric] = useState("avgSpeed");
   const [rankScope, setRankScope] = useState("latest");
   const [compareStudentIds, setCompareStudentIds] = useState([]);
   const [compareMetric, setCompareMetric] = useState("avgSpeed");
-  const [records, setRecords] = useState(INIT_RUNS);
+  const [records, setRecords] = useState(() => load("rt_records", INIT_RUNS));
   const [saved, setSaved] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
   const [isTeacher, setIsTeacher] = useState(false);
   const [showStudentManager, setShowStudentManager] = useState(false);
 
-  const [goals, setGoals] = useState({ distance:4.0, avgPace:6.0, avgSpeed:10.0, cadence:175, heartRate:160, calories:300, stride:1.2 });
+  const [goals, setGoals] = useState(() => load("rt_goals", { distance:4.0, avgPace:6.0, avgSpeed:10.0, cadence:175, heartRate:160, calories:300, stride:1.2 }));
   const [goalEditing, setGoalEditing] = useState(false);
   const [goalDraft, setGoalDraft] = useState({ ...goals });
 
-  const [reflections, setReflections] = useState({});
-  const [feedbacks, setFeedbacks] = useState({});
+  const [reflections, setReflections] = useState(() => load("rt_reflections", {}));
+  const [feedbacks, setFeedbacks] = useState(() => load("rt_feedbacks", {}));
+
+  // ── 데이터 변경 시 자동 저장 ──────────────────────────────────
+  useEffect(() => { save("rt_students", students); }, [students]);
+  useEffect(() => { save("rt_records", records); }, [records]);
+  useEffect(() => { save("rt_goals", goals); }, [goals]);
+  useEffect(() => { save("rt_reflections", reflections); }, [reflections]);
+  useEffect(() => { save("rt_feedbacks", feedbacks); }, [feedbacks]);
+  useEffect(() => { save("rt_selectedId", selectedStudentId); }, [selectedStudentId]);
   const [reflForm, setReflForm] = useState({ text:"", mood:"😊", effort:3 });
   const [reflTarget, setReflTarget] = useState(null);
   const [reflSaved, setReflSaved] = useState(false);
