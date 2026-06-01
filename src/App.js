@@ -369,14 +369,7 @@ export default function RunTracker() {
     setGoalEditing(false);
   };
 
-  // 로딩 화면
-  if (loading) return (
-    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
-      <div style={{ fontSize:48 }}>🏃</div>
-      <div style={{ fontSize:16, fontWeight:700, color:C.neon }}>데이터 불러오는 중...</div>
-      <div style={{ fontSize:12, color:C.muted }}>약산 달리기 클럽</div>
-    </div>
-  );
+  const classStats = () => {
     const byGrade = {};
     students.forEach(s => {
       const runs = records[s.id] || [];
@@ -489,6 +482,15 @@ export default function RunTracker() {
   ] : [];
 
   const noStudents = students.length === 0;
+
+  // 로딩 화면
+  if (loading) return (
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
+      <div style={{ fontSize:48 }}>🏃</div>
+      <div style={{ fontSize:16, fontWeight:700, color:C.neon }}>데이터 불러오는 중...</div>
+      <div style={{ fontSize:12, color:C.muted }}>약산 달리기 클럽</div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, color:C.text, fontFamily:"'Noto Sans KR',sans-serif", paddingBottom:60 }}>
