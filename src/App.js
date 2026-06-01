@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -253,14 +254,12 @@ const StarRating = ({ value, onChange, readonly=false }) => (
   </div>
 );
 
-// ── Supabase 클라이언트 ───────────────────────────────────────────
-import { createClient } from "@supabase/supabase-js";
+// ── 메인 ─────────────────────────────────────────────────────────
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
   process.env.REACT_APP_SUPABASE_KEY
 );
 
-// ── 메인 ─────────────────────────────────────────────────────────
 export default function RunTracker() {
   const [tab, setTab] = useState("dashboard");
   const [students, setStudents] = useState([]);
